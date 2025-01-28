@@ -1,18 +1,23 @@
+import { QueryClient } from '@tanstack/react-query'
 import {
   Link,
   Outlet,
+  ScriptOnce,
   ScrollRestoration,
   createRootRoute,
+  createRootRouteWithContext,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { Meta, Scripts } from '@tanstack/start'
+import { getAuthSessionOptions } from 'lib/server/auth/auth-functions'
 import * as React from 'react'
 import { DefaultCatchBoundary } from '~/components/DefaultCatchBoundary'
 import { NotFound } from '~/components/NotFound'
+import { getThemeCookie, useThemeStore } from '~/components/ThemeToggle'
 import appCss from '~/styles/app.css?url'
 import { seo } from '~/utils/seo'
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
       {
@@ -51,6 +56,21 @@ export const Route = createRootRoute({
       { rel: 'icon', href: '/favicon.ico' },
     ],
   }),
+  loader: async () => {
+    const themeCookie = await getThemeCookie()
+    console.log('themeCookie', themeCookie)
+    return {
+      themeCookie,
+    }
+  },
+  beforeLoad: async ({ context }) => {
+		const auth = await context.queryClient.ensureQueryData(
+			getAuthSessionOptions()
+		)
+    console.log('auth', auth)
+
+		return { auth };
+	},
   errorComponent: (props) => {
     return (
       <RootDocument>
@@ -71,64 +91,27 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const { themeCookie } = Route.useLoaderData()
+  React.useEffect(() => {
+    useThemeStore.setState({ mode: themeCookie })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const themeClass = themeCookie === 'dark' ? 'dark' : ''
+  console.log('themeClass client', themeClass)
+  console.log('themeCookie', themeCookie)
+
   return (
-    <html>
+    <html lang="en" className={themeClass}>
       <head>
+      {themeCookie === 'auto' ? (
+					<ScriptOnce
+						children={`window.matchMedia('(prefers-color-scheme: dark)').matches ? document.documentElement.classList.add('dark') : null`}
+					/>
+				) : null}
         <Meta />
       </head>
       <body>
-        <div className="p-2 flex gap-2 text-lg">
-          <Link
-            to="/"
-            activeProps={{
-              className: 'font-bold',
-            }}
-            activeOptions={{ exact: true }}
-          >
-            Home
-          </Link>{' '}
-          <Link
-            to="/posts"
-            activeProps={{
-              className: 'font-bold',
-            }}
-          >
-            Posts
-          </Link>{' '}
-          <Link
-            to="/users"
-            activeProps={{
-              className: 'font-bold',
-            }}
-          >
-            Users
-          </Link>{' '}
-          <Link
-            to="/layout-a"
-            activeProps={{
-              className: 'font-bold',
-            }}
-          >
-            Layout
-          </Link>{' '}
-          <Link
-            to="/deferred"
-            activeProps={{
-              className: 'font-bold',
-            }}
-          >
-            Deferred
-          </Link>{' '}
-          <Link
-            // @ts-expect-error
-            to="/this-route-does-not-exist"
-            activeProps={{
-              className: 'font-bold',
-            }}
-          >
-            This Route Does Not Exist
-          </Link>
-        </div>
         <hr />
         {children}
         <ScrollRestoration />
